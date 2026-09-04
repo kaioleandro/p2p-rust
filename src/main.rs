@@ -1,7 +1,4 @@
-use std::{
-    error::Error,
-    time::Duration,
-};
+use std::{error::Error, time::Duration};
 
 use futures::StreamExt;
 use libp2p::{
@@ -33,23 +30,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
             yamux::Config::default,
         )?
         .with_behaviour(|key| {
-            let message_authenticity =
-                gossipsub::MessageAuthenticity::Signed(key.clone());
+            let message_authenticity = gossipsub::MessageAuthenticity::Signed(key.clone());
 
             let config = gossipsub::ConfigBuilder::default()
                 .heartbeat_interval(Duration::from_secs(10))
                 .build()
                 .expect("Configuração válida");
 
-            let mut gossipsub =
-                gossipsub::Behaviour::new(message_authenticity, config)
-                    .expect("Gossipsub criado");
+            let mut gossipsub = gossipsub::Behaviour::new(message_authenticity, config)
+                .expect("Gossipsub criado");
 
             let topic = gossipsub::IdentTopic::new("chat");
 
-            gossipsub
-                .subscribe(&topic)
-                .expect("Inscrição no tópico");
+            gossipsub.subscribe(&topic).expect("Inscrição no tópico");
 
             Ok(Behaviour {
                 gossipsub,
@@ -67,66 +60,53 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mut stdin = io::BufReader::new(io::stdin()).lines();
 
-    println!("Chat P2P iniciado!");
-    println!("Digite uma mensagem:");
+    println!("Digite seu nome para entrar no chat:");
+    let nome = loop {
+        if let Some(linha) = stdin.next_line().await? {
+            let linha = linha.trim().to_string();
+            if !linha.is_empty() {
+                break linha;
+            }
+        }
+        println!("Nome não pode ser vazio, tente novamente:");
+    };
+
+    println!("\nBem-vindo, {nome}! Aguardando conexões e mensagens...\n");
 
     loop {
         select! {
             Ok(Some(line)) = stdin.next_line() => {
-                if let Err(error) =
-                    swarm.behaviour_mut()
-                        .gossipsub
-                        .publish(topic.clone(), line.as_bytes())
+                let mensagem = format!("{nome}: {line}");
+
+                if let Err(error) = swarm
+                    .behaviour_mut()
+                    .gossipsub
+                    .publish(topic.clone(), mensagem.as_bytes())
                 {
                     println!("Erro ao enviar: {error:?}");
                 }
             }
 
             event = swarm.select_next_some() => match event {
-                SwarmEvent::Behaviour(
-                    BehaviourEvent::Mdns(
-                        mdns::Event::Discovered(peers)
-                    )
-                ) => {
+                SwarmEvent::Behaviour(BehaviourEvent::Mdns(mdns::Event::Discovered(peers))) => {
                     for (peer_id, _) in peers {
                         println!("Peer encontrado: {peer_id}");
-
-                        swarm
-                            .behaviour_mut()
-                            .gossipsub
-                            .add_explicit_peer(&peer_id);
+                        swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
                     }
                 }
 
-                SwarmEvent::Behaviour(
-                    BehaviourEvent::Mdns(
-                        mdns::Event::Expired(peers)
-                    )
-                ) => {
+                SwarmEvent::Behaviour(BehaviourEvent::Mdns(mdns::Event::Expired(peers))) => {
                     for (peer_id, _) in peers {
                         println!("Peer desconectado: {peer_id}");
-
-                        swarm
-                            .behaviour_mut()
-                            .gossipsub
-                            .remove_explicit_peer(&peer_id);
+                        swarm.behaviour_mut().gossipsub.remove_explicit_peer(&peer_id);
                     }
                 }
 
-                SwarmEvent::Behaviour(
-                    BehaviourEvent::Gossipsub(
-                        gossipsub::Event::Message {
-                            propagation_source,
-                            message,
-                            ..
-                        }
-                    )
-                ) => {
-                    println!(
-                        "\n[{}]: {}",
-                        propagation_source,
-                        String::from_utf8_lossy(&message.data)
-                    );
+                SwarmEvent::Behaviour(BehaviourEvent::Gossipsub(gossipsub::Event::Message {
+                    message,
+                    ..
+                })) => {
+                    println!("\n{}", String::from_utf8_lossy(&message.data));
                 }
 
                 SwarmEvent::NewListenAddr { address, .. } => {
