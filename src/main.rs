@@ -1,5 +1,6 @@
 use std::{error::Error, time::Duration};
 
+use chrono::Local;
 use futures::StreamExt;
 use libp2p::{
     gossipsub,
@@ -76,7 +77,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     loop {
         select! {
             Ok(Some(line)) = stdin.next_line() => {
-                let mensagem = format!("{nome}: {line}");
+                let agora = Local::now().format("%d/%m/%Y %H:%M:%S");
+                let mensagem = format!("[{agora}] {nome}: {line}");
 
                 if let Err(error) = swarm
                     .behaviour_mut()
