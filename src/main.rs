@@ -1,4 +1,4 @@
-use std::{error::Error, time::Duration};
+use std::{error::Error, io::Write as _, time::Duration};
 
 use chrono::Local;
 use futures::StreamExt;
@@ -19,6 +19,35 @@ use tokio::{
 struct Behaviour {
     gossipsub: gossipsub::Behaviour,
     mdns: mdns::tokio::Behaviour,
+}
+
+const ARQUIVO_LOG: &str = "chat.log";
+
+fn registrar_log(linha: &str) {
+    let agora = Local::now().format("%d/%m/%Y %H:%M:%S");
+    let entrada = format!("[{agora}] {linha}\n");
+
+    if let Err(erro) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(ARQUIVO_LOG)
+        .and_then(|mut arquivo| arquivo.write_all(entrada.as_bytes()))
+    {
+        eprintln!("Erro ao registrar log: {erro:?}");
+    }
+}
+
+fn registrar_log_sem_horario(linha: &str) {
+    let entrada = format!("{linha}\n");
+
+    if let Err(erro) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(ARQUIVO_LOG)
+        .and_then(|mut arquivo| arquivo.write_all(entrada.as_bytes()))
+    {
+        eprintln!("Erro ao registrar log: {erro:?}");
+    }
 }
 
 #[tokio::main]
@@ -74,6 +103,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     println!("\nBem-vindo, {nome}! Aguardando conexões e mensagens...\n");
 
+    registrar_log(&format!("Novo chat iniciado - usuário: {nome}"));
+
     loop {
         select! {
             Ok(Some(line)) = stdin.next_line() => {
@@ -86,6 +117,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .publish(topic.clone(), mensagem.as_bytes())
                 {
                     println!("Erro ao enviar: {error:?}");
+                } else {
+                    registrar_log(&format!("{nome}: {line}"));
                 }
             }
 
@@ -108,11 +141,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     message,
                     ..
                 })) => {
-                    println!("\n{}", String::from_utf8_lossy(&message.data));
+                    let texto = String::from_utf8_lossy(&message.data).to_string();
+                    println!("\n{texto}");
+                    registrar_log_sem_horario(&texto);
                 }
 
                 SwarmEvent::NewListenAddr { address, .. } => {
                     println!("Escutando em: {address}");
+                }
+
+                SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+                    println!("Conexão estabelecida com {peer_id}");
+                    registrar_log(&format!("Conexão estabelecida com {peer_id}"));
+                }
+
+                SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
+                    println!("Conexão encerrada com {peer_id}: {cause:?}");
+                    registrar_log(&format!("Conexão encerrada com {peer_id}: {cause:?}"));
                 }
 
                 _ => {}
