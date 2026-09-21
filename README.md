@@ -4,6 +4,7 @@ Aplicação de chat ponto a ponto (P2P) desenvolvida em Rust utilizando a biblio
 
 ## Autores
 
+- Amanda de Oliveira Pereira
 - Erik de Oliveira Pádua
 - Kaio Leandro Garcia Silvestrini
 
